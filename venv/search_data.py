@@ -22,7 +22,7 @@ def cleanse_text(text):
 
 def main(args):
     load_dotenv()
-    db_name = 'finger'
+    db_name = 'data_db'
     ip_addr = os.getenv('ip_addr')
 
     conn = connections.connect(

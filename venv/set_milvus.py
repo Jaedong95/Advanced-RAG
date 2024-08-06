@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 import os
 
 load_dotenv()
-db_name = 'finger'
+db_name = 'data_db'
 ip_addr = os.getenv('ip_addr')
 
 conn = connections.connect(
