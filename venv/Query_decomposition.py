@@ -61,8 +61,6 @@ def gen(x):
 query = "회사에 입사할 때 제출해야 하는게 뭐야 ?"
 rewrite_query = get_rewrite_query(query)
 stepback_query = get_stepback_query(query)
-# print(f'rewrite_query: {rewrite_query}')
-# print(f'stepback_query: {stepback_query}')
 
 from transformers import AutoTokenizer, AutoModelForCausalLM
 from transformers import TextStreamer, GenerationConfig
