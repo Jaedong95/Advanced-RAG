@@ -1,7 +1,7 @@
 '''
 전처리한 데이터 파일을 읽어와 VectorDB에 임베딩한다. 
 사용 벡터 DB: Milvus
-대상 Collection: Finger-rulebook
+대상 Collection: rulebook
 임베딩 모델: bge-M3 Model
 '''
 from pymilvus import MilvusClient, DataType
@@ -27,7 +27,7 @@ def collection_info(collection_name):
 
 def main(args):
     load_dotenv()
-    db_name = 'finger'
+    db_name = 'data_db'
     ip_addr = os.getenv('ip_addr')
 
     conn = connections.connect(
