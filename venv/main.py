@@ -26,8 +26,9 @@ def main(args):
     collection = milvus_db.get_collection(args.collection_name)
     collection.load()
     
-    emb_model = EmbModel()
+    emb_model = EmbModel()   # Embedding Model: bge-m3
     emb_model.set_embbeding_config()
+    
     llm_qt = OpenAIQT(llm_config)   # Query Translator
     llm_qt.set_generation_config()
 
