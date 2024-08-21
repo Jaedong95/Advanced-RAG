@@ -34,8 +34,9 @@ def main(args):
 
     llm_rs = LLMOpenAI(llm_config)   # Response Generator
     llm_rs.set_generation_config()
-    
+
     flag = True 
+    threshold = 0.6
     print('대화를 시작해보세요 ! 회사 내부 규정에 대해 설명해주는 챗봇입니다.')
     while(flag):
         query = input('사용자: ')
@@ -45,9 +46,10 @@ def main(args):
         stepback_q = llm_qt.stepback_query(query)
         llm_qt.get_query_status('Stepback Prompting', rewrite_q, stepback_q)
 
+        print('')
         print(f'Step 2. 가상 문서를 생성합니다.')
         hyde = llm_qt.get_response(stepback_q)
-        print(f'생성된 문서: {hyde}')
+        print(f'생성된 문서: {hyde}', end='\n\n')
         
         print(f'Step 3. 관련 정보를 추출합니다.')
         cleansed_text = data_milvus.cleanse_text(hyde)
@@ -55,10 +57,15 @@ def main(args):
         data_milvus.set_search_params()
         search_result = data_milvus.search_data(collection, query_emb, output_fields='text')
         
+        print('')
         print(f'Step 4. 추출된 정보를 재조정합니다.')
+        id_list = []; dist_list = []
         retreived_txt = data_milvus.decode_search_result(search_result)
-        data_milvus.get_distance(search_result)
-        print(f'추출된 정보: {retreived_txt}')
+        id_list, dist_list = data_milvus.get_distance(search_result)
+        if dist_list[0] > threshold:
+            print(f'Euclidean distance: {dist_list[0]}')
+            retreived_txt = "모르는 정보입니다." 
+        print(f'추출된 정보: {retreived_txt}', end='\n\n')
         
         # Augment data 
         prompt_template = llm_rs.set_prompt_template(stepback_q, retreived_txt)
