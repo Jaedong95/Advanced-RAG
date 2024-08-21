@@ -43,16 +43,17 @@ def main(args):
         llm_qt.get_query_status('Query Rewriting', query, rewrite_q)
         stepback_q = llm_qt.stepback_query(query)
         llm_qt.get_query_status('Stepback Prompting', rewrite_q, stepback_q)
+
         print(f'Step 2. 가상 문서를 생성합니다.')
         hyde = llm_qt.get_response(stepback_q)
         print(f'생성된 문서: {hyde}')
         
-        # Retrieve data 
         print(f'Step 3. 관련 정보를 추출합니다.')
         cleansed_text = data_milvus.cleanse_text(hyde)
         query_emb = emb_model.bge_embed_data(cleansed_text)
         data_milvus.set_search_params()
         search_result = data_milvus.search_data(collection, query_emb, output_fields='text')
+        
         print(f'Step 4. 추출된 정보를 재조정합니다.')
         retreived_txt = data_milvus.decode_search_result(search_result)
         data_milvus.get_distance(search_result)
@@ -61,12 +62,13 @@ def main(args):
         # Augment data 
         prompt_template = llm_rs.set_prompt_template(stepback_q, retreived_txt)
 
-        # Generate data 
+        # Generate data
+        print(f'Step 5. 응답을 생성합니다.') 
         response = llm_rs.get_response(prompt_template)
         print(f'챗봇: {response}')
         print(f'응답 결과를 평가합니다 .. * Evaluation metric: ragas')
+        
         continue_conv = input('계속 대화하시겠습니까 ? (y/n): ')
-        print(continue_conv)
         if continue_conv == 'y':
             flag = True 
             print(f'대화를 계속합니다.')
