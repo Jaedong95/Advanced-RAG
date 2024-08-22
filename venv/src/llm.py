@@ -1,6 +1,7 @@
 from transformers import AutoTokenizer, AutoModelForCausalLM, AutoConfig
 from transformers import TextStreamer, GenerationConfig
 from openai import OpenAI
+from abc import ABC, abstractmethod
 import numpy as np
 import torch
 import os 
