@@ -47,6 +47,14 @@ class EmbModel():
             l2_distance = np.linalg.norm(emb1 - emb2)
             return l2_distance
 
+    @abstractmethod
+    def get_hf_encoder(self):
+        pass
+
+    @abstractmethod 
+    def get_cohere_encoder(self, cohere_api):
+        pass
+
 class LLMOpenAI(LLMModel):
     def __init__(self, config):
         super().__init__(config)
