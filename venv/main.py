@@ -1,6 +1,6 @@
 from dotenv import load_dotenv
 from src import MilVus, DataMilVus
-from src import OpenAIQT, MistralQT, QueryRouter
+from src import OpenAIQT, MistralQT, RulebookQR
 from src import EmbModel, LLMOpenAI, LLMMistral
 import os 
 import argparse
@@ -10,6 +10,7 @@ def main(args):
     load_dotenv()
     db_name = 'finger'
     ip_addr = os.getenv('ip_addr')
+    cohere_api = os.getenv('COHERE_API_KEY')
 
     with open(os.path.join(args.config_path, args.db_config)) as f:
         db_config = json.load(f)
@@ -32,6 +33,14 @@ def main(args):
     llm_qt = OpenAIQT(llm_config)   # Query Translator
     llm_qt.set_generation_config()
 
+    rulebook_qr = RulebookQR()   # Query Router
+    rulebook_qr.create_prompt_injection_utterances()
+    rulebook_qr.create_rulebook_utterances()
+    prompt_injection_route = rulebook_qr.create_route('prompt_injection', rulebook_qr.prompt_injection_utterances)
+    rulebook_route = rulebook_qr.create_route('rulebook_check', rulebook_qr.prompt_rulebook_check_utterances)
+    route_encoder = rulebook_qr.get_cohere_encoder(cohere_api)
+    rulebook_rl = rulebook_qr.create_route_layer(route_encoder, [prompt_injection_route, rulebook_route])
+
     llm_rs = LLMOpenAI(llm_config)   # Response Generator
     llm_rs.set_generation_config()
 
@@ -45,6 +54,10 @@ def main(args):
         llm_qt.get_query_status('Query Rewriting', query, rewrite_q)
         stepback_q = llm_qt.stepback_query(query)
         llm_qt.get_query_status('Stepback Prompting', rewrite_q, stepback_q)
+
+        # Query Routing 
+        routed_query = rulebook_qr.semantic_layer(rulebook_rl, stepback_q)
+        llm_qt.get_query_status('Query Routing', stepback_q, routed_query)
 
         print('')
         print(f'Step 2. 가상 문서를 생성합니다.')
@@ -92,6 +105,6 @@ if __name__ == '__main__':
     cli_parser.add_argument('--output_dir', type=str, default='../../data/pdf/embed_output')
     cli_parser.add_argument('--file_name', type=str, default='취업규칙.csv')
     cli_parser.add_argument('--collection_name', type=str, default='rule_book')
-    cli_parser.add_argument('--partition_name', type=str, default=None)
+    # cli_parser.add_argument('--partition_name', type=str, default=None)
     cli_argse = cli_parser.parse_args()
     main(cli_argse)
