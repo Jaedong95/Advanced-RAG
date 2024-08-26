@@ -1,10 +1,14 @@
 from dotenv import load_dotenv
-from src import MilVus, DataMilVus
+from src import MilVus, DataMilVus, MilvusMeta
 from src import OpenAIQT, MistralQT, RulebookQR
 from src import EmbModel, LLMOpenAI, LLMMistral
 import os 
 import argparse
 import json
+
+
+def set_default_env(args):
+    pass
 
 def main(args):
     load_dotenv()
@@ -22,8 +26,11 @@ def main(args):
     milvus_db = MilVus(db_config)
     milvus_db.set_env()
     data_milvus = DataMilVus(db_config)
-    print(f'client: {milvus_db.client}')
-    
+    meta_milvus = MilvusMeta()
+    meta_milvus.set_rulebook_map()
+    rulebook_eng_to_kor = meta_milvus.rulebook_eng_to_kor
+    # print(rulebook_eng_to_kor)
+
     collection = milvus_db.get_collection(args.collection_name)
     collection.load()
     
@@ -45,8 +52,12 @@ def main(args):
     llm_rs.set_generation_config()
 
     flag = True 
-    threshold = 0.6
-    print('대화를 시작해보세요 ! 회사 내부 규정에 대해 설명해주는 챗봇입니다.')
+    threshold = 0.65
+    milvus_db.get_partition(collection)
+    partition_list = [rulebook_eng_to_kor[p_name] for p_name in milvus_db.partition_names if not p_name.startswith('_')]
+    # print(', '.join(partition_list))
+    print(f"대화를 시작해보세요 ! 회사 내부 규정에 대해 설명해주는 챗봇입니다.")
+    print(f"* 현재 {', '.join(partition_list)}에 대한 질의응답이 가능합니다.")
     while(flag):
         query = input('사용자: ')
         print(f'Step 1. Query를 재조정합니다.')
@@ -55,40 +66,38 @@ def main(args):
         stepback_q = llm_qt.stepback_query(query)
         llm_qt.get_query_status('Stepback Prompting', rewrite_q, stepback_q)
 
-        # Query Routing 
+        print(f'Step 2. Query를 Routing합니다.')
         routed_query = rulebook_qr.semantic_layer(rulebook_rl, stepback_q)
-        llm_qt.get_query_status('Query Routing', stepback_q, routed_query)
+        print(f'routed query: {routed_query}', end='\n\n')
+        if rulebook_rl(stepback_q).name == 'prompt_injection':    # 부적절한 발화가 입력된 경우   
+            print(llm_rs.get_response(routed_query))
+        else: 
+            print(f'Step 3. 가상 문서를 생성합니다.')
+            hyde = llm_qt.get_response(stepback_q)
+            print(f'생성된 문서: {hyde}', end='\n\n')
+            
+            print(f'Step 4. 관련 정보를 추출합니다.')
+            cleansed_text = data_milvus.cleanse_text(hyde)
+            query_emb = emb_model.bge_embed_data(cleansed_text)
+            data_milvus.set_search_params(query_emb, output_fields='text')   
+            search_params = data_milvus.search_params
+            search_result = data_milvus.search_data(collection, search_params)
+            print(f'추출된 정보: {search_result}', end='\n\n')
+            
+            print(f'Step 5. 추출된 정보를 재조정합니다.')
+            id_list = []; dist_list = []
+            retreived_txt = data_milvus.decode_search_result(search_result)
+            id_list, dist_list = data_milvus.get_distance(search_result)
+            threshold_txt = data_milvus.check_l2_threshold(retreived_txt, threshold, dist_list[0])
+            print(f'후처리된 정보: {threshold_txt}', end='\n\n')
+            
+            # Augment data 
+            prompt_template = llm_rs.set_prompt_template(routed_query, threshold_txt)
 
-        print('')
-        print(f'Step 2. 가상 문서를 생성합니다.')
-        hyde = llm_qt.get_response(stepback_q)
-        print(f'생성된 문서: {hyde}', end='\n\n')
-        
-        print(f'Step 3. 관련 정보를 추출합니다.')
-        cleansed_text = data_milvus.cleanse_text(hyde)
-        query_emb = emb_model.bge_embed_data(cleansed_text)
-        data_milvus.set_search_params(query_emb, output_fields='text')
-        search_params = data_milvus.search_params
-        search_result = data_milvus.search_data(collection, search_params)
-        
-        print('')
-        print(f'Step 4. 추출된 정보를 재조정합니다.')
-        id_list = []; dist_list = []
-        retreived_txt = data_milvus.decode_search_result(search_result)
-        id_list, dist_list = data_milvus.get_distance(search_result)
-        if dist_list[0] > threshold:
-            print(f'Euclidean distance: {dist_list[0]}')
-            retreived_txt = "모르는 정보입니다." 
-        print(f'추출된 정보: {retreived_txt}', end='\n\n')
-        
-        # Augment data 
-        prompt_template = llm_rs.set_prompt_template(stepback_q, retreived_txt)
-
-        # Generate data
-        print(f'Step 5. 응답을 생성합니다.') 
-        response = llm_rs.get_response(prompt_template)
-        print(f'챗봇: {response}')
-        print(f'응답 결과를 평가합니다 .. * Evaluation metric: ragas')
+            # Generate data
+            print(f'Step 6. 응답을 생성합니다.') 
+            response = llm_rs.get_response(prompt_template)
+            print(f'챗봇: {response}')
         
         continue_conv = input('계속 대화하시겠습니까 ? (y/n): ')
         if continue_conv == 'y':
@@ -106,6 +115,5 @@ if __name__ == '__main__':
     cli_parser.add_argument('--output_dir', type=str, default='../../data/pdf/embed_output')
     cli_parser.add_argument('--file_name', type=str, default='취업규칙.csv')
     cli_parser.add_argument('--collection_name', type=str, default='rule_book')
-    # cli_parser.add_argument('--partition_name', type=str, default=None)
     cli_argse = cli_parser.parse_args()
     main(cli_argse)
