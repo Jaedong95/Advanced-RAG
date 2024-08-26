@@ -72,7 +72,7 @@ class LLMOpenAI(LLMModel):
             response = self.client.chat.completions.create(
                 model=model,
                 messages=[
-                    {"role": "system", "content": "너는 금융권에서 일하고 있는 조수야. 사용자 질문에 대해 명확한 끝맺음으로 답을 해줘."},
+                    {"role": "system", "content": "너는 금융권에서 일하고 있는 조수로, 회사 규정에 대해 알려주는 역할을 맡고 있어. 사용자 질문에 대해 명확한 끝맺음으로 답을 해줘."},
                     {"role": "user", "content": query},
                 ],
                 max_tokens=self.gen_config['max_tokens'],
@@ -89,7 +89,7 @@ class LLMOpenAI(LLMModel):
         --------------------------------
         질문: {query} 
         """
-        return self.rag_prompt_template.format(query=query, context=context)
+        return self.rag_prompt_template.format  (query=query, context=context)
 
 
 class LLMMistral(LLMModel):

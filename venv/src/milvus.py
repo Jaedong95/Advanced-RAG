@@ -94,9 +94,13 @@ class MilVus():
         return collection
 
     def get_partition(self, collection):
-        partitions = collection.partitions 
-        for partition in partitions: 
+        self.partitions = collection.partitions 
+        self.partition_names = [] 
+        self.partition_entities_num = [] 
+        for partition in self.partitions: 
             print(f'partition name: {partition.name} num of entitiy: {partition.num_entities}')
+            self.partition_names.append(partition.name)
+            self.partition_entities_num.append(partition.num_entities)
 
     def collection_info(self, collection_name):
         print(f'collection info')
@@ -111,6 +115,9 @@ class MilVus():
 
 
 class DataMilVus(DataProcessor):   #  args: (DataProcessor)
+    '''
+    구축된 Milvus DB에 대한 data search, insert 등 작업 수행
+    '''
     def __init__(self, args):
         super().__init__(args)
         self.args = args
@@ -136,7 +143,7 @@ class DataMilVus(DataProcessor):   #  args: (DataProcessor)
         self.search_params = {
             "data": [query_emb],
             "anns_field": anns_field, 
-            "param": {"metric_type": metric_type}, # "params": {"nprobe": 0}, "offset": 0}
+            "param": {"metric_type": metric_type, "params": {"nprobe": 0}, "offset": 0},
             "limit": limit,
             "expr": expr, 
             "output_fields": [output_fields],
@@ -162,3 +169,22 @@ class DataMilVus(DataProcessor):   #  args: (DataProcessor)
 
     def rerank_data(self, search_result):
         pass 
+
+
+class MilvusMeta(MilVus):
+    ''' 
+    파일이름 - ID Code, 파일이름 - 영문이름 (파티션) 매핑 정보 관리 클래스 
+    '''
+    def set_rulebook_map(self):
+        self.rulebook_id_code = {
+            '취업규칙': '00', 
+            '윤리규정': '01', 
+            '신여비교통비': '02', 
+            '경조금지급규정': '03'
+        }
+        self.rulebook_kor_to_eng = {
+            '취업규칙': 'employment_rules',
+            '윤리규정': 'code_of_ethics',
+            '신여비교통비': 'transport_expenses',
+            '경조금지급규정': 'extra_expenditure',
+        }
