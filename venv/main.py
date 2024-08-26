@@ -67,8 +67,9 @@ def main(args):
         print(f'Step 3. 관련 정보를 추출합니다.')
         cleansed_text = data_milvus.cleanse_text(hyde)
         query_emb = emb_model.bge_embed_data(cleansed_text)
-        data_milvus.set_search_params()
-        search_result = data_milvus.search_data(collection, query_emb, output_fields='text')
+        data_milvus.set_search_params(query_emb, output_fields='text')
+        search_params = data_milvus.search_params
+        search_result = data_milvus.search_data(collection, search_params)
         
         print('')
         print(f'Step 4. 추출된 정보를 재조정합니다.')
