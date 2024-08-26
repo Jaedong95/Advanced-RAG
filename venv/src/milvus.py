@@ -97,7 +97,6 @@ class MilVus():
         partitions = collection.partitions 
         for partition in partitions: 
             print(f'partition name: {partition.name} num of entitiy: {partition.num_entities}')
-    
 
     def collection_info(self, collection_name):
         print(f'collection info')
@@ -126,22 +125,6 @@ class DataMilVus(DataProcessor):   #  args: (DataProcessor)
             port='19530'
         )
 
-    def bge_milvus_embed(self, text):   
-        ''' 2.4 x ''' 
-        from pymilvus.model.hybrid import BGEM3EmbedddingFunction
-        bge_m3_ef = BGEM3EmbedddingFunction(
-            model_name='BAAI/bge-m3',
-            device='cpu',
-            use_fp16=False
-        )
-        
-        if isinstance(text, str):
-            bge_emb = bge_m3_ef.encode_queries(text)
-            print(f"embeddings (dense): {bge_emb['dense']}")
-        else:
-            bge_emb = bge_m3_ef.encode_documents(text)
-        return bge_emb
-
     def insert_data(self, m_data, collection_name, partition_name=None):
         collection = Collection(collection_name)
         collection.insert(m_data, partition_name)
@@ -149,33 +132,33 @@ class DataMilVus(DataProcessor):   #  args: (DataProcessor)
     def get_len_data(self, collection):
         print(collection.num_entities)
 
-    def set_search_params(self, metric_type="L2", offset=5, ignore_growing=False):
+    def set_search_params(self, query_emb, anns_field='text_emb', metric_type="L2", expr=None, limit=5, output_fields=None, consistency_level="Strong"):
         self.search_params = {
-            "metric_type": metric_type, 
-            # "offset": offset, 
-            # "ignore_growing": ignore_growing, 
-            # "params": {"nprobe": 80} 
+            "data": [query_emb],
+            "anns_field": anns_field, 
+            "param": {"metric_type": metric_type}, # "params": {"nprobe": 0}, "offset": 0}
+            "limit": limit,
+            "expr": expr, 
+            "output_fields": [output_fields],
+            "consistency_level": consistency_level
         }
     
-    def search_data(self, collection, query_emb, limit=5, anns_field='text_emb', output_fields=None, consistency_level="Strong"):
-        results = collection.search(
-                data=[query_emb], 
-                anns_field=anns_field, 
-                # the sum of `offset` in `param` and `limit` should be less than 16384.
-                param=self.search_params,
-                limit=5,
-                expr=None,
-                # set the names of the fields you want to retrieve from the search result.
-                output_fields=[output_fields],
-                consistency_level=consistency_level
-            )
+    def search_data(self, collection, search_params):
+        results = collection.search(**search_params)
         return results
 
     def get_distance(self, search_result):
+        id_list = [] 
+        distance_list = [] 
         for idx in range(len(search_result[0])):
-            print(search_result[0][idx].id, search_result[0][idx].distance)
+            id_list.append(search_result[0][idx].id)
+            distance_list.append(search_result[0][idx].distance)
+        return id_list, distance_list
 
     def decode_search_result(self, search_result):
         # print(f'ids: {search_result[0][0].id}')
         print(f"entity: {search_result[0][0].entity.get('text')}") 
         return search_result[0][0].entity.get('text')
+
+    def rerank_data(self, search_result):
+        pass 
