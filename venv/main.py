@@ -11,13 +11,17 @@ def main(args):
     load_dotenv() 
     ip_addr = os.getenv('ip_addr')
     cohere_api = os.getenv('COHERE_API_KEY')
-    env_manager = EnvManager(args)
-
-    data_milvus = env_manager.set_vectordb()
-    emb_model, llm_rs = env_manager.set_llm()
-    llm_qt = env_manager.set_query_translator()
-    rulebook_qr, rulebook_rl = env_manager.set_query_router()
+    if not ip_addr or not cohere_api:
+        raise ValueError("IP 주소나 Cohere API 키가 제대로 로드되지 않았습니다.")
     
+    env_manager = EnvManager(args)
+    data_milvus = env_manager.set_vectordb()
+    emb_model, response_model = env_manager.set_llm()
+    query_translator = env_manager.set_query_translator()
+    query_router, route_layer = env_manager.set_query_router()
+    rulebook_chatbot = ChatUser(vectordb=data_milvus, emb_model=emb_model, response_model=response_model, 
+                    query_translator=query_translator, query_router=query_router, route_layer=route_layer)
+
     flag = True 
     threshold = 0.65
     
@@ -26,51 +30,32 @@ def main(args):
     while(flag):
         query = input('사용자: ')
         print(f'Step 1. Query를 재조정합니다.')
-        rewrite_q = llm_qt.rewrite_query(query)
-        llm_qt.get_query_status('Query Rewriting', query, rewrite_q)
-        stepback_q = llm_qt.stepback_query(query)
-        llm_qt.get_query_status('Stepback Prompting', rewrite_q, stepback_q)
+        stepback_q = rulebook_chatbot.translate_query(query)
 
         print(f'Step 2. Query를 Routing합니다.')
-        routed_query = rulebook_qr.semantic_layer(rulebook_rl, stepback_q)
+        routed_query = rulebook_chatbot.query_router.semantic_layer(route_layer, stepback_q)
         print(f'routed query: {routed_query}', end='\n\n')
-        if rulebook_rl(stepback_q).name == 'prompt_injection':    # 부적절한 발화가 입력된 경우   
-            print(llm_rs.get_response(routed_query))
+        if rulebook_chatbot.route_layer(stepback_q).name == 'prompt_injection':    # 부적절한 발화가 입력된 경우   
+            print(rulebook_chatbot.response_model.get_response(routed_query))
         else:
             print(f'Step 3. 가상 문서를 생성합니다.')
-            hyde = llm_qt.get_response(stepback_q)
+            hyde = rulebook_chatbot.response_model.get_response(stepback_q)
             print(f'생성된 문서: {hyde}', end='\n\n')
             
             print(f'Step 4. 관련 정보를 추출합니다.')
-            cleansed_text = data_milvus.cleanse_text(hyde)
-            query_emb = emb_model.bge_embed_data(cleansed_text)
-            data_milvus.set_search_params(query_emb, output_fields='text')   
-            search_params = data_milvus.search_params
-            search_result = data_milvus.search_data(env_manager.collection, search_params)
+            rulebook_chatbot.retrieve_data(hyde, env_manager.collection)
             # print(f'추출된 정보: {search_result}', end='\n\n')
             
-            print(f'Step 5. 추출된 정보를 재조정합니다.')
-            id_list = []; dist_list = []
-            retreived_txt = data_milvus.decode_search_result(search_result)
-            id_list, dist_list = data_milvus.get_distance(search_result)
-            threshold_txt = data_milvus.check_l2_threshold(retreived_txt, threshold, dist_list[0])
+            print(f'Step 5. 후속 처리(Re-ranking, Check distance)를 진행합니다.')
+            threshold_txt = rulebook_chatbot.postprocess_data(threshold)
             print(f'후처리된 정보: {threshold_txt}', end='\n\n')
-            
-            # Augment data 
-            prompt_template = llm_rs.set_prompt_template(routed_query, threshold_txt)
 
-            # Generate data
             print(f'Step 6. 응답을 생성합니다.') 
-            response = llm_rs.get_response(prompt_template)
+            prompt_template = rulebook_chatbot.response_model.set_prompt_template(routed_query, threshold_txt)
+            response = rulebook_chatbot.response_model.get_response(prompt_template)
             print(f'챗봇: {response}')
         
-        continue_conv = input('계속 대화하시겠습니까 ? (y/n): ')
-        if continue_conv == 'y':
-            flag = True 
-            print(f'대화를 계속합니다.')
-        else:
-            flag = False
-            print(f'대화를 종료합니다.')
+        flag = rulebook_chatbot.continue_conv(flag)
 
 if __name__ == '__main__':
     cli_parser = argparse.ArgumentParser()
