@@ -2,7 +2,7 @@ from dotenv import load_dotenv
 from src import MilVus, DataMilVus, MilvusMeta
 from src import OpenAIQT, MistralQT, RulebookQR
 from src import EmbModel, LLMOpenAI, LLMMistral
-from src import EnvManager
+from src import ProjectManager
 import os 
 import argparse
 import json
