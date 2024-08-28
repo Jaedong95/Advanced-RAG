@@ -36,9 +36,9 @@ class EnvManager():
             self.llm_config = json.load(f)
         emb_model = EmbModel()   # Embedding Model: bge-m3
         emb_model.set_embbeding_config()
-        llm_rs = LLMOpenAI(self.llm_config)   # Response Generator
-        llm_rs.set_generation_config()
-        return emb_model, llm_rs 
+        response_model = LLMOpenAI(self.llm_config)   # Response Generator
+        response_model.set_generation_config()
+        return emb_model, response_model 
 
     def set_query_translator(self):
         llm_qt = OpenAIQT(self.llm_config)   # Query Translator
@@ -57,7 +57,34 @@ class EnvManager():
 
 
 class ChatUser():
-    def __init__(self, args):
-        self.args = args 
+    def __init__(self, vectordb=None, emb_model=None, response_model=None, query_translator=None, query_router=None, route_layer=None):
+        self.vectordb = vectordb
+        self.emb_model = emb_model
+        self.response_model = response_model 
+        self.query_translator = query_translator 
+        self.query_router = query_router 
+        self.route_layer = route_layer 
     
-    pass
+    def translate_query(self, query):
+        rewrite_q = self.query_translator.rewrite_query(query)
+        self.query_translator.get_query_status('Query Rewriting', query, rewrite_q)
+        stepback_q = self.query_translator.stepback_query(query)
+        self.query_translator.get_query_status('Stepback Prompting', rewrite_q, stepback_q)
+        return stepback_q
+
+    def retrieve_data(self, query, collection, output_fields='text'):
+        cleansed_text = self.vectordb.cleanse_text(query)
+        query_emb = self.emb_model.bge_embed_data(cleansed_text)
+        self.vectordb.set_search_params(query_emb, output_fields=output_fields)   
+        search_params = self.vectordb.search_params
+        self.search_result = self.vectordb.search_data(collection, search_params)
+
+    def postprocess_data(self, threshold):
+        id_list = []; dist_list = []
+        '''
+        if reranking is needed
+        '''
+        retreived_txt = self.vectordb.decode_search_result(self.search_result)
+        id_list, dist_list = self.vectordb.get_distance(self.search_result)
+        threshold_txt = self.vectordb.check_l2_threshold(retreived_txt, threshold, dist_list[0])
+        return threshold_txt
