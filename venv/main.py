@@ -2,29 +2,27 @@ from dotenv import load_dotenv
 from src import MilVus, DataMilVus, MilvusMeta
 from src import OpenAIQT, MistralQT, RulebookQR
 from src import EmbModel, LLMOpenAI, LLMMistral
-from src import ProjectManager
-import os 
+from src import EnvManager, ChatUser
 import argparse
 import json
-
-
-
+import os 
 
 def main(args):
     load_dotenv() 
     ip_addr = os.getenv('ip_addr')
     cohere_api = os.getenv('COHERE_API_KEY')
+    env_manager = EnvManager(args)
 
-    data_milvus, partition_list, collection = set_vectordb(args, ip_addr)
-    emb_model, llm_rs = set_llm(args)
-    llm_qt = set_query_translator(llm_config)
-    rulebook_qr, rulebook_rl = set_query_router(cohere_api)
+    data_milvus = env_manager.set_vectordb()
+    emb_model, llm_rs = env_manager.set_llm()
+    llm_qt = env_manager.set_query_translator()
+    rulebook_qr, rulebook_rl = env_manager.set_query_router()
     
     flag = True 
     threshold = 0.65
     
     print(f"대화를 시작해보세요 ! 회사 내부 규정에 대해 설명해주는 챗봇입니다.")
-    print(f"* 현재 {', '.join(partition_list)}에 대한 질의응답이 가능합니다.")
+    print(f"* 현재 {', '.join(env_manager.partition_list)}에 대한 질의응답이 가능합니다.")
     while(flag):
         query = input('사용자: ')
         print(f'Step 1. Query를 재조정합니다.')
@@ -48,7 +46,7 @@ def main(args):
             query_emb = emb_model.bge_embed_data(cleansed_text)
             data_milvus.set_search_params(query_emb, output_fields='text')   
             search_params = data_milvus.search_params
-            search_result = data_milvus.search_data(collection, search_params)
+            search_result = data_milvus.search_data(env_manager.collection, search_params)
             # print(f'추출된 정보: {search_result}', end='\n\n')
             
             print(f'Step 5. 추출된 정보를 재조정합니다.')
