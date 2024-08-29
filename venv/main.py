@@ -56,9 +56,9 @@ def main(args):
     
     print(f"대화를 시작해보세요 ! 회사 내부 규정에 대해 설명해주는 챗봇입니다.")
     print(f"* 현재 {', '.join(env_manager.partition_list)}에 대한 질의응답이 가능합니다.")
-    while(conv_flag):
+    while conv_flag:
         query = input('사용자: ')
-        if use_query_transform:
+        if use_query_transform:    
             print(f'Step 1. Query를 재조정합니다.')
             query = rulebook_chatbot.transform_query(query) 
         prompt_query = query
@@ -66,7 +66,7 @@ def main(args):
         if use_query_routing:
             print(f'Step 2. Query를 Routing합니다.')
             query, injection_flag = rulebook_chatbot.route_query(query)
-            if injection_flag == True:   # 대화 종료
+            if injection_flag == True:   # Prompt Injection이 감지된 경우 대화 종료
                 logger.info(f'Prompt Injection이 감지되었습니다 !')
                 conv_flag = rulebook_chatbot.continue_conv(flag)
                 continue
@@ -77,7 +77,7 @@ def main(args):
         
         print(f'Step 4. 관련 정보를 추출합니다.')
         rulebook_chatbot.retrieve_data(hyde, env_manager.collection)
-        # print(f'추출된 정보: {search_result}', end='\n\n')
+        logger.info(f'추출된 정보: {search_result}')
         
         print(f'Step 5. 후속 처리(Re-ranking, Check distance)를 진행합니다.')
         threshold_txt = rulebook_chatbot.postprocess_data(threshold)
@@ -99,5 +99,5 @@ if __name__ == '__main__':
     cli_parser.add_argument('--collection_name', type=str, default='rule_book')
     cli_parser.add_argument('--use_query_transform', type=str2bool, default=True)
     cli_parser.add_argument('--use_query_routing', type=str2bool, default=True)
-    cli_argse = cli_parser.parse_args()
-    main(cli_argse)
+    cli_args = cli_parser.parse_args()
+    main(cli_args)
