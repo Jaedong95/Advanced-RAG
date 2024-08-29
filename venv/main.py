@@ -51,12 +51,12 @@ def main(args):
     rulebook_chatbot = ChatUser(vectordb=data_milvus, emb_model=emb_model, response_model=response_model, 
                     query_transformer=env_manager.query_transformer, query_router=env_manager.query_router, route_layer=env_manager.route_layer, logger=logger)
 
-    flag = True; injection_flag = False
+    conv_flag = True; injection_flag = False
     threshold = 0.65
     
     print(f"대화를 시작해보세요 ! 회사 내부 규정에 대해 설명해주는 챗봇입니다.")
     print(f"* 현재 {', '.join(env_manager.partition_list)}에 대한 질의응답이 가능합니다.")
-    while(flag):
+    while(conv_flag):
         query = input('사용자: ')
         if use_query_transform:
             print(f'Step 1. Query를 재조정합니다.')
@@ -68,7 +68,7 @@ def main(args):
             query, injection_flag = rulebook_chatbot.route_query(query)
             if injection_flag == True:   # 대화 종료
                 logger.info(f'Prompt Injection이 감지되었습니다 !')
-                flag = rulebook_chatbot.continue_conv(flag)
+                conv_flag = rulebook_chatbot.continue_conv(flag)
                 continue
         
         print(f'Step 3. 가상 문서를 생성합니다.')
@@ -87,7 +87,7 @@ def main(args):
         prompt_template = rulebook_chatbot.response_model.set_prompt_template(prompt_query, threshold_txt)
         response = rulebook_chatbot.response_model.get_response(prompt_template)
         print(f'챗봇: {response}')
-        flag = rulebook_chatbot.continue_conv(flag)
+        conv_flag = rulebook_chatbot.continue_conv(flag)
 
 
 if __name__ == '__main__':
