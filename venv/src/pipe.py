@@ -107,7 +107,7 @@ class ChatUser():
         threshold_txt = self.vectordb.check_l2_threshold(retreived_txt, threshold, dist_list[0])
         return threshold_txt
 
-    def continue_conv(self, flag):
+    def continue_conv(self):
         continue_conv = input('계속 대화하시겠습니까 ? (y/n): ')
         if continue_conv.lower() == 'y':
             flag = True 
@@ -115,5 +115,4 @@ class ChatUser():
         else:
             flag = False
             print(f'대화를 종료합니다.')
-
         return flag 
