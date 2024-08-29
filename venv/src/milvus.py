@@ -4,6 +4,7 @@ from pymilvus import Collection, CollectionSchema, FieldSchema, utility
 from pymilvus import connections
 from .data_p import DataProcessor
 import numpy as np
+import logging
 
 class MilVus():
     def __init__(self, args):
@@ -19,14 +20,47 @@ class MilVus():
             host=self.ip_addr, 
             port='19530'
         )
-    
+
+    def _get_data_type(self, dtype):
+        if dtype == 'int':
+            return DataType.INT64 
+        elif dtype == 'str':
+            return DataType.VARCHAR
+        elif dtype == 'float':
+            return DataType.FLOAT_VECTOR
+        return None
+
+    def get_partition_info(self, collection):
+        self.partitions = collection.partitions 
+        self.partition_names = [] 
+        self.partition_entities_num = [] 
+        for partition in self.partitions: 
+            # print(f'partition name: {partition.name} num of entitiy: {partition.num_entities}')
+            self.partition_names.append(partition.name)
+            self.partition_entities_num.append(partition.num_entities)
+
+    def get_collection_info(self, collection_name):
+        print(f'collection info')
+        collection = Collection(collection_name)
+        print(f'schema info: {collection.schema}') 
+        print(f'collection name: {collection.name}')
+        print(f'is collection empty ?: {collection.is_empty}')
+        print(f'num of data: {collection.num_entities}')
+        print(f'primary key of collection: {collection.primary_field}')
+        print(f'partition of collection: {collection.partition}')
+
+
+class MilvusEnvManager(MilVus):
+    def __init__(self, args):
+        super().__init__(args)
+        self.logger = logging.getLogger(__name__)
+
     def create_db(self, db_name):
-        try:
-            assert db.create_database(db_name), f'{db_name}은 이미 존재합니다.'
-            # db.create_database(db_name)
-        except:
-            print(f'보유 Database: {db.list_database()}')
-            pass
+        if not db.has_database(db_name):
+            db.create_database(db_name)
+            self.logger.info(f'Created database: {db_name}')
+        else:
+            self.logger.warning(f'Database {db_name} already exists.')
 
     def create_collection(self, collection_name, schema, shards_num):
         collection = Collection(
@@ -38,13 +72,7 @@ class MilVus():
         return collection 
 
     def create_field_schema(self, schema_name, dtype=None, dim=1024, max_length=200, is_primary=False):
-        data_type = None
-        if dtype == 'int':
-            data_type = DataType.INT64 
-        elif dtype == 'str':
-            data_type = DataType.VARCHAR
-        elif dtype == 'float':   # vector
-            data_type = DataType.FLOAT_VECTOR
+        data_type = self._get_data_type(dtype)
         field_schema = FieldSchema(
             name=schema_name,
             dtype=data_type,
@@ -60,27 +88,27 @@ class MilVus():
             description=desc,
             enable_dynamic_field=enable_dynamic_field
         )
-        print(f'created Schema !')
+        self.logger.info('Created schema')
         return schema
 
     def create_index(self, collection, field_name):
         index_params = {
-            "metric_type": "L2",    # type of metrics used to measure the similarity of vectors 
-            "index_type": "IVF_FLAT",   # type of index used to accelerate vector search 
+            "metric_type": "L2",
+            "index_type": "IVF_FLAT",
             "params": {"nlist": 65536},
         }   
         collection.create_index(
-            field_name = field_name,
-            index_params = index_params
+            field_name=field_name,
+            index_params=index_params
         )
-        # print(f'building index on: {utility.index_building_progress(field_name)}')
+        self.logger.info(f'Created index on field: {field_name}')
     
     def create_partition(self, collection, partition_name):
-        try:
-            assert collection.create_partition(partition_name), f'{partition_name}은 이미 존재하는 파티션입니다.'
-        except:
-            pass
-        print(f'partitions: {collection.partitions}')
+        if not collection.has_partition(partition_name):
+            collection.create_partition(partition_name)
+            self.logger.info(f'Created partition: {partition_name}')
+        else:
+            self.logger.warning(f'Partition {partition_name} already exists.')
 
     def delete_collection(self, collection_name):
         try:
@@ -88,31 +116,7 @@ class MilVus():
             utility.drop_collection(collection_name)
         except:
             pass
-
-    def get_collection(self, collection_name):
-        collection = Collection(collection_name)
-        return collection
-
-    def get_partition(self, collection):
-        self.partitions = collection.partitions 
-        self.partition_names = [] 
-        self.partition_entities_num = [] 
-        for partition in self.partitions: 
-            print(f'partition name: {partition.name} num of entitiy: {partition.num_entities}')
-            self.partition_names.append(partition.name)
-            self.partition_entities_num.append(partition.num_entities)
-
-    def collection_info(self, collection_name):
-        print(f'collection info')
-        collection = Collection(collection_name)
-        print(f'schema info: {collection.schema}') 
-        print(f'collection info: {collection.description}')
-        print(f'collection name: {collection.name}')
-        print(f'is collection empty ?: {collection.is_empty}')
-        print(f'num of data: {collection.num_entities}')
-        print(f'primary key of collection: {collection.primary_field}')
-        print(f'partition of collection: {collection.partition}')
-
+    
 
 class DataMilVus(DataProcessor):   #  args: (DataProcessor)
     '''
@@ -171,7 +175,7 @@ class DataMilVus(DataProcessor):   #  args: (DataProcessor)
         pass 
 
 
-class MilvusMeta(MilVus):
+class MilvusMeta():
     ''' 
     파일이름 - ID Code, 파일이름 - 영문이름 (파티션) 매핑 정보 관리 클래스 
     '''
@@ -188,3 +192,4 @@ class MilvusMeta(MilVus):
             '신여비교통비': 'transport_expenses',
             '경조금지급규정': 'extra_expenditure',
         }
+        self.rulebook_eng_to_kor = {value: key for key, value in self.rulebook_kor_to_eng.items()}

@@ -43,7 +43,7 @@ class EmbModel():
         embeddings = list(map(np.float32, embeddings))
         return embeddings
 
-    def calc_emb_similarity(emb1, emb2, metric='L2'):
+    def calc_emb_similarity(self, emb1, emb2, metric='L2'):
         if metric == 'L2':   # Euclidean distance
             l2_distance = np.linalg.norm(emb1 - emb2)
             return l2_distance
@@ -67,12 +67,12 @@ class LLMOpenAI(LLMModel):
             "temperature": temperature
         }
 
-    def get_response(self, query, model='gpt-4'):
+    def get_response(self, query, role="너는 금융권에서 일하고 있는 조수로, 회사 규정에 대해 알려주는 역할을 맡고 있어. 사용자 질문에 대해 간단 명료하게 답을 해줘.", model='gpt-4'):
         try:
             response = self.client.chat.completions.create(
                 model=model,
                 messages=[
-                    {"role": "system", "content": "너는 금융권에서 일하고 있는 조수로, 회사 규정에 대해 알려주는 역할을 맡고 있어. 사용자 질문에 대해 명확한 끝맺음으로 답을 해줘."},
+                    {"role": "system", "content": role},
                     {"role": "user", "content": query},
                 ],
                 max_tokens=self.gen_config['max_tokens'],
@@ -89,7 +89,7 @@ class LLMOpenAI(LLMModel):
         --------------------------------
         질문: {query} 
         """
-        return self.rag_prompt_template.format  (query=query, context=context)
+        return self.rag_prompt_template.format(query=query, context=context)
 
 
 class LLMMistral(LLMModel):

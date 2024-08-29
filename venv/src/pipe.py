@@ -1,5 +1,6 @@
 from dotenv import load_dotenv
-from .milvus import MilVus, DataMilVus, MilvusMeta
+from pymilvus import Collection, CollectionSchema, FieldSchema, utility
+from .milvus import MilvusEnvManager, DataMilVus, MilvusMeta
 from .query import OpenAIQT, MistralQT, RulebookQR
 from .llm import EmbModel, LLMOpenAI, LLMMistral
 import json
@@ -17,18 +18,18 @@ class EnvManager():
             db_config = json.load(f)
         db_config['ip_addr'] = self.ip_addr
 
-        milvus_db = MilVus(db_config)
-        milvus_db.set_env()
+        self.milvus_db = MilvusEnvManager(db_config)
+        self.milvus_db.set_env()
         data_milvus = DataMilVus(db_config)
         meta_milvus = MilvusMeta()
         meta_milvus.set_rulebook_map()
         rulebook_eng_to_kor = meta_milvus.rulebook_eng_to_kor
 
-        self.collection = milvus_db.get_collection(self.args.collection_name)
+        self.collection = Collection(self.args.collection_name)
         self.collection.load()
 
-        milvus_db.get_partition(self.collection)
-        self.partition_list = [rulebook_eng_to_kor[p_name] for p_name in milvus_db.partition_names if not p_name.startswith('_')]
+        self.milvus_db.get_partition_info(self.collection)
+        self.partition_list = [rulebook_eng_to_kor[p_name] for p_name in self.milvus_db.partition_names if not p_name.startswith('_')]
         return data_milvus
 
     def set_llm(self):
@@ -40,37 +41,54 @@ class EnvManager():
         response_model.set_generation_config()
         return emb_model, response_model 
 
-    def set_query_translator(self):
-        llm_qt = OpenAIQT(self.llm_config)   # Query Translator
-        llm_qt.set_generation_config()
-        return llm_qt
+    def set_query_transformer(self, use_query_transform):
+        if use_query_transform == False: 
+            self.query_transformer = None 
+        else:
+            self.query_transformer = OpenAIQT(self.llm_config)   # Query Translator
+            self.query_transformer.set_generation_config()
 
-    def set_query_router(self):
-        rulebook_qr = RulebookQR()   # Query Router
-        rulebook_qr.create_prompt_injection_utterances()
-        rulebook_qr.create_rulebook_utterances()
-        prompt_injection_route = rulebook_qr.create_route('prompt_injection', rulebook_qr.prompt_injection_utterances)
-        rulebook_route = rulebook_qr.create_route('rulebook_check', rulebook_qr.prompt_rulebook_check_utterances)
-        route_encoder = rulebook_qr.get_cohere_encoder(self.cohere_api)
-        rulebook_rl = rulebook_qr.create_route_layer(route_encoder, [prompt_injection_route, rulebook_route])
-        return rulebook_qr, rulebook_rl
+    def set_query_router(self, use_query_routing):
+        if use_query_routing == False: 
+            self.query_router = None
+            self.route_layer = None 
+        else:
+            self.query_router = RulebookQR()   # Query Router
+            self.query_router.create_prompt_injection_utterances()
+            self.query_router.create_rulebook_utterances()
+            prompt_injection_route = self.query_router.create_route('prompt_injection', self.query_router.prompt_injection_utterances)
+            rulebook_route = self.query_router.create_route('rulebook_check', self.query_router.prompt_rulebook_check_utterances)
+            route_encoder = self.query_router.get_cohere_encoder(self.cohere_api)
+            self.route_layer = self.query_router.create_route_layer(route_encoder, [prompt_injection_route, rulebook_route])
 
 
 class ChatUser():
-    def __init__(self, vectordb=None, emb_model=None, response_model=None, query_translator=None, query_router=None, route_layer=None):
+    def __init__(self, vectordb=None, emb_model=None, response_model=None, query_transformer=None, query_router=None, route_layer=None, logger=None):
         self.vectordb = vectordb
         self.emb_model = emb_model
         self.response_model = response_model 
-        self.query_translator = query_translator 
+        self.query_transformer = query_transformer 
         self.query_router = query_router 
-        self.route_layer = route_layer 
+        self.route_layer = route_layer
+        self.logger = logger  
     
-    def translate_query(self, query):
-        rewrite_q = self.query_translator.rewrite_query(query)
-        self.query_translator.get_query_status('Query Rewriting', query, rewrite_q)
-        stepback_q = self.query_translator.stepback_query(query)
-        self.query_translator.get_query_status('Stepback Prompting', rewrite_q, stepback_q)
+    def transform_query(self, query):
+        rewrite_q = self.query_transformer.rewrite_query(query)
+        self.query_transformer.get_query_status('Query Rewriting', query, rewrite_q)
+        stepback_q = self.query_transformer.stepback_query(query)
+        self.query_transformer.get_query_status('Stepback Prompting', rewrite_q, stepback_q)
         return stepback_q
+
+    def route_query(self, query):
+        self.logger.info("Step 2. Query를 Routing합니다.")
+        routed_query = self.query_router.semantic_layer(self.route_layer, query)
+        self.logger.info(f"Routed query: {routed_query}")
+
+        # 부적절한 발화가 입력된 경우 처리
+        if self.route_layer(query).name == 'prompt_injection':
+            response = self.response_model.get_response(routed_query)
+            return response, True  # 대화를 종료
+        return routed_query, False
 
     def retrieve_data(self, query, collection, output_fields='text'):
         cleansed_text = self.vectordb.cleanse_text(query)
