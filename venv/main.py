@@ -13,7 +13,7 @@ logging.basicConfig(
     level=logging.INFO,  # 로그 레벨 설정 (DEBUG, INFO, WARNING, ERROR, CRITICAL)
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler("app.log"),  # 로그를 파일에 기록
+        logging.FileHandler("app.log"),# mode='w'),  # 로그를 파일에 기록
         # logging.StreamHandler()  # 콘솔에도 출력
     ]
 )
@@ -43,7 +43,6 @@ def main(args):
 
     use_query_transform = args.use_query_transform
     use_query_routing = args.use_query_routing
-    logger.info(f"Query Routing 사용 여부: {use_query_routing}")
 
     env_manager.set_query_transformer(use_query_transform)
     env_manager.set_query_router(use_query_routing)
@@ -68,26 +67,27 @@ def main(args):
             query, injection_flag = rulebook_chatbot.route_query(query)
             if injection_flag == True:   # Prompt Injection이 감지된 경우 대화 종료
                 logger.info(f'Prompt Injection이 감지되었습니다 !')
-                conv_flag = rulebook_chatbot.continue_conv(flag)
+                print(query)
+                conv_flag = rulebook_chatbot.continue_conv()
                 continue
         
         print(f'Step 3. 가상 문서를 생성합니다.')
         hyde = rulebook_chatbot.response_model.get_response(query)
-        print(f'생성된 문서: {hyde}', end='\n\n')
+        logger.info(f'생성된 문서: {hyde}')
         
         print(f'Step 4. 관련 정보를 추출합니다.')
         rulebook_chatbot.retrieve_data(hyde, env_manager.collection)
-        logger.info(f'추출된 정보: {search_result}')
+        logger.info(f'추출된 정보: {rulebook_chatbot.search_result}')
         
         print(f'Step 5. 후속 처리(Re-ranking, Check distance)를 진행합니다.')
         threshold_txt = rulebook_chatbot.postprocess_data(threshold)
-        print(f'후처리된 정보: {threshold_txt}', end='\n\n')
+        logger.info(f'후처리된 정보: {threshold_txt}')
 
         print(f'Step 6. 응답을 생성합니다.') 
         prompt_template = rulebook_chatbot.response_model.set_prompt_template(prompt_query, threshold_txt)
         response = rulebook_chatbot.response_model.get_response(prompt_template)
         print(f'챗봇: {response}')
-        conv_flag = rulebook_chatbot.continue_conv(flag)
+        conv_flag = rulebook_chatbot.continue_conv()
 
 
 if __name__ == '__main__':
