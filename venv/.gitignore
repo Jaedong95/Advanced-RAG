@@ -1,0 +1,6 @@
+# 환경 설정 파일
+.env
+
+# etc
+src/__pycache__
+*.log

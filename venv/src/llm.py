@@ -4,7 +4,12 @@ from openai import OpenAI
 from abc import ABC, abstractmethod
 import numpy as np
 import torch
-import os 
+import warnings
+import torch
+import os
+
+# 특정 경고 메시지 무시
+# warnings.filterwarnings("ignore", category=UserWarning, message="TypedStorage is deprecated")
 
 class LLMModel():
     def __init__(self, config):
@@ -14,8 +19,11 @@ class LLMModel():
         self.device = torch.device("cuda") if torch.cuda.is_available() else "cpu"    
         model.to(self.device)
     
-    def model_info(self):
-        ''' model size, param .. etc info '''
+    def set_generation_config(self, max_tokens=500, temperature=0.9):
+        self.gen_config = {
+            "max_tokens": max_tokens,
+            "temperature": temperature
+        }
 
 
 class EmbModel():
@@ -92,6 +100,46 @@ class LLMOpenAI(LLMModel):
         return self.rag_prompt_template.format(query=query, context=context)
 
 
+class LLMLlama(LLMModel):
+    def __init__(self, config):
+        super().__init__(config)
+        self.model_name = "sh2orc/Llama-3.1-Korean-8B-Instruct"
+        self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+        self.set_gpu(self.model)
+
+    def set_generation_config(self, max_tokens=500, temperature=0.9):
+        self.gen_config = {
+            "max_tokens": max_tokens,
+            "temperature": temperature
+        }
+
+    def get_response(self, query, role="너는 금융권에서 일하고 있는 조수로, 회사 규정에 대해 알려주는 역할을 맡고 있어. 사용자 질문에 대해 간단 명료하게 답을 해줘."):
+        messages = [
+            {"role": "system", "content": role},
+            {"role": "user", "content": query}
+            ]
+        try:
+            prompt = self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+            pipeline = transformers.pipeline(
+                "text-generation",
+                model=self.model_name,
+                torch_dtype=torch.float16,
+                device_map="auto",
+            )
+            outputs = pipeline(prompt, max_new_tokens=2048, do_sample=True, temperature=0.7, top_k=50, top_p=0.95)
+        except Exception as e:
+            return f"Error: {str(e)}"
+    
+    def set_prompt_template(self, query, context):
+        self.rag_prompt_template = """
+        다음 질문에 대해 주어진 정보를 참고해서 답을 해줘.
+        주어진 정보: {context}
+        --------------------------------
+        질문: {query} 
+        """
+        return self.rag_prompt_template.format(query=query, context=context)
+
+
 class LLMMistral(LLMModel):
     def __init__(self, config):
         super().__init__(config)
@@ -141,7 +189,3 @@ class LLMMistral(LLMModel):
             {query}
             [/INST] """
         ) 
-
-
-class ResponseEvaluator():
-    pass

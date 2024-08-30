@@ -168,7 +168,7 @@ class DataMilVus(DataProcessor):   #  args: (DataProcessor)
 
     def decode_search_result(self, search_result):
         # print(f'ids: {search_result[0][0].id}')
-        print(f"entity: {search_result[0][0].entity.get('text')}") 
+        # print(f"entity: {search_result[0][0].entity.get('text')}") 
         return search_result[0][0].entity.get('text')
 
     def rerank_data(self, search_result):
@@ -184,12 +184,16 @@ class MilvusMeta():
             '취업규칙': '00', 
             '윤리규정': '01', 
             '신여비교통비': '02', 
-            '경조금지급규정': '03'
+            '경조금지급규정': '03',
+            '직무발명보상': '04',
+            '투자업무_운영관리': '05',
         }
         self.rulebook_kor_to_eng = {
             '취업규칙': 'employment_rules',
             '윤리규정': 'code_of_ethics',
             '신여비교통비': 'transport_expenses',
             '경조금지급규정': 'extra_expenditure',
+            '직무발명보상': 'ei_compensation',
+            '투자업무_운영관리': 'io_management'
         }
         self.rulebook_eng_to_kor = {value: key for key, value in self.rulebook_kor_to_eng.items()}
